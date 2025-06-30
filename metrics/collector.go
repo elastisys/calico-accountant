@@ -3,6 +3,7 @@ package metrics
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/monzo/calico-accountant/iptables"
@@ -76,7 +77,56 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
+	// ---------------------------------------------------------------------
+	// Deduplicate metrics that would have identical label sets within the
+	// same scrape. Prometheus client library disallows emitting two metrics
+	// with the same (name, labelset) combination in one collection pass.
+	// ---------------------------------------------------------------------
+	seen := make(map[string]struct{})
+
+	makeKey := func(r *iptables.Result) string {
+		switch r.CountType {
+		case iptables.Drop:
+			return strings.Join([]string{
+				r.PodName,
+				r.PodNamespace,
+				r.AppLabel,
+				r.PodIP,
+				r.ChainType.String(),
+				"drop",
+			}, "|")
+		case iptables.Accept:
+			return strings.Join([]string{
+				r.PodName,
+				r.PodNamespace,
+				r.AppLabel,
+				r.PodIP,
+				r.ChainType.String(),
+				"accept",
+				c.cw.GetPolicyByChainName(r.Target),
+			}, "|")
+		case iptables.AcceptedDrop:
+			return strings.Join([]string{
+				r.PodName,
+				r.PodNamespace,
+				r.AppLabel,
+				r.PodIP,
+				r.ChainType.String(),
+				"acceptdrop",
+				c.cw.GetPolicyByChainName(r.Target),
+			}, "|")
+		default:
+			return "" // shouldn't happen
+		}
+	}
+
 	for _, result := range results {
+		key := makeKey(result)
+		if _, dup := seen[key]; dup {
+			continue // skip duplicates
+		}
+		seen[key] = struct{}{}
+
 		err := parse(ch, result, c.cw)
 		if err != nil {
 			glog.Errorf("Cannot parse the result: %+v, error: %v", result, err)
