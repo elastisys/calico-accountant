@@ -3,7 +3,7 @@ WORKDIR $GOPATH/src/github.com/monzo/calico-accountant
 COPY . $GOPATH/src/github.com/monzo/calico-accountant
 RUN make build
 
-FROM alpine
+FROM alpine:latest
 LABEL maintainer="Jack Kleeman <jack@monzo.com>"
 WORKDIR /root/
 RUN apk --update add iptables
