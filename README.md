@@ -1,3 +1,5 @@
+> **Note:** This fork has been updated to be compatible with Calico v2.29.x.
+
 # calico-accountant
 
 calico-accountant is a prometheus exporter that helps you track the consequences of Calico policies. It requests
